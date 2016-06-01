@@ -26,6 +26,7 @@ const int LED_PIN = 13;
 // control
 bool playing = true;
 bool playButtonPrevState = false;
+int tempo = 120;
 
 class Beat {
   public:
@@ -53,7 +54,7 @@ void setup() {
   smKick.setFreq((float) kick_SAMPLERATE / (float) kick_NUM_CELLS);
   smTom.setFreq((float) tommid_SAMPLERATE / (float) tommid_NUM_CELLS);
   Serial.begin(9600);
-  stepDelay.set(110);
+  stepDelay.set(tempo);
   resetSamples();
 }
 
@@ -65,7 +66,39 @@ void resetSamples() {
   while(smTom.isPlaying()) smTom.next();
 }
 
+void checkSerialCommand() {
+  String command = "";
+  String param = "";
+  bool commandFound = false;
+  bool spaceFound = false;
+  char thisChar;
+  while(Serial.available()) {
+    thisChar = (char) Serial.read();
+    if(!spaceFound && thisChar == ' ') spaceFound = true;
+    else if(spaceFound) param += thisChar;
+    else command += thisChar;
+    commandFound = true;
+  }
+  if(commandFound) {
+    if(command == "stop") playing = false;
+    else if(command == "start") playing = true;
+    else if(command == "tempo") {
+      tempo = param.toInt();
+    } else if(command == "pitch") {
+      setPitch(param.toFloat());
+    }
+  }
+}
+
+void setPitch(float pitch) {
+  smSnare.setFreq(pitch * (float) snare_SAMPLERATE / (float) snare_NUM_CELLS);
+  smHat.setFreq(pitch * (float) closedhat_SAMPLERATE / (float) closedhat_NUM_CELLS);
+  smKick.setFreq(pitch * (float) kick_SAMPLERATE / (float) kick_NUM_CELLS);
+  smTom.setFreq(pitch * (float) tommid_SAMPLERATE / (float) tommid_NUM_CELLS);
+}
+
 void updateControl(){
+  checkSerialCommand();
   if(!playButtonPrevState && digitalRead(START_PIN)) {
     playing = !playing;
     if(!playing) {
@@ -75,16 +108,13 @@ void updateControl(){
     }
   }
   playButtonPrevState = digitalRead(START_PIN);
-  //smSnare.setFreq(((float) map(mozziAnalogRead(0),0,1023,200,1) / (float) 100) * (float) snare_SAMPLERATE / (float) snare_NUM_CELLS);
-  //smHat.setFreq(((float) map(mozziAnalogRead(0),0,1023,200,1) / (float) 100) * (float) closedhat_SAMPLERATE / (float) closedhat_NUM_CELLS);
-  //smKick.setFreq(((float) map(mozziAnalogRead(0),0,1023,200,1) / (float) 100) * (float) kick_SAMPLERATE / (float) kick_NUM_CELLS);
-  //smTom.setFreq(((float) map(mozziAnalogRead(0),0,1023,200,1) / (float) 100) * (float) tommid_SAMPLERATE / (float) tommid_NUM_CELLS);
   if(playing && stepDelay.ready()){
     if(b.hat[stepNum]) smHat.start();
     if(b.snare[stepNum]) smSnare.start();
     if(b.kick[stepNum]) smKick.start();
     if(b.tom[stepNum]) smTom.start();
     //stepDelay.set(map(mozziAnalogRead(0),0,1023,50,250));
+    stepDelay.set(60000 / tempo / 4);
     stepDelay.start();
     stepNum ++;
     stepNum = stepNum % stepsTotal;
