@@ -80,8 +80,11 @@ def char2mozzi(infile, outfile, tablename, samplerate):
 		print ("wrote " + outfile)
 
 def process_folder():
+        sample_defs = ""
         for filename in os.listdir('prepared'):
-                char2mozzi('prepared/' + filename, '../../libraries/Mozzi-1.0.2/samples/mattdrums/' + os.path.splitext(filename)[0] + '.h', os.path.splitext(filename)[0], 16384)
+                raw_name = os.path.splitext(filename)[0]
+                sample_defs += 'Sample <'+raw_name+'_NUM_CELLS, AUDIO_RATE> s_'+raw_name+'('+raw_name+'_DATA);\n'
+                #char2mozzi('prepared/' + filename, '../../libraries/Mozzi-1.0.2/samples/mattdrums/' + os.path.splitext(filename)[0] + '.h', os.path.splitext(filename)[0], 16384)
+        print sample_defs
 
-#char2mozzi(infile, outfile, tablename, samplerate)
 process_folder()

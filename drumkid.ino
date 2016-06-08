@@ -9,11 +9,6 @@
 
 #define CONTROL_RATE 64
 
-Sample <closedhat_NUM_CELLS, AUDIO_RATE> s_hat_808(closedhat_DATA);
-Sample <snare_NUM_CELLS, AUDIO_RATE> s_snare_niko(snare_DATA);
-Sample <kick_NUM_CELLS, AUDIO_RATE> s_kick_808(kick_DATA);
-Sample <clap_NUM_CELLS, AUDIO_RATE> s_clap(clap_DATA);
-
 const int SEQUENCE_LENGTH = 16;
 
 // channel defs
@@ -36,9 +31,22 @@ const byte HAT_808 = 4;
 const byte CLAP = 5;
 // etc...
 
+// select modes
+const int BEAT_SELECT = 0;
+const int CHANNEL_SELECT = 1;
+const int SOUND_SELECT = 2;
+const int SAVE_SELECT = 3;
+
+// selection
+int selectMode = BEAT_SELECT;
+int selectedBeat = 0;
+int selectedChannel = 0;
+
 // timing
 EventDelay stepDelay;
+EventDelay halfStepDelay;
 int stepDelayPeriod = 100;
+int currentStep = 0;
 
 // output
 long out;
@@ -48,32 +56,15 @@ bool playing = true;
 int zoom = 0;
 int hyperactivity = 0;
 float pitch = 1.0;
+bool hitInputReady = true;
 
-class Sequence {
-  public:
-    Sequence();
-    bool c[NUM_CHANNELS][SEQUENCE_LENGTH]; // channels
-    void init(int channel, bool sequence[]);
-
-  private:
-    
-};
-
-Sequence::Sequence() {
-  
-}
-
-void Sequence::init(int channel, bool sequence[]) {
-  for(int i = 0; i < SEQUENCE_LENGTH; i ++) {
-    c[channel][i] = sequence[i];
-  }
-}
+#include "SampleDefs.h";
 
 class Channel {
   public:
     Channel();
     int next();
-    void start(int velocity);
+    void startHit(int velocity);
     byte getSoundIndex();
     void setSoundIndex(byte soundIndex);
     byte getNumSounds();
@@ -83,7 +74,6 @@ class Channel {
     void setSequence(bool sequence[SEQUENCE_LENGTH]);
   private:
     byte _sounds[MAX_CHANNEL_SOUNDS];
-    bool _sequence[SEQUENCE_LENGTH];
     byte _soundIndex = 0;
     byte _numSounds = 0;
     int _sound = 0;
@@ -97,68 +87,17 @@ Channel::Channel() {
 }
 
 int Channel::next() {
-  switch(_sound) {
-    case HAT_808:
-    _out = s_hat_808.next();
-    break;
-
-    case SNARE_NIKO:
-    _out = s_snare_niko.next();
-    break;
-
-    case KICK_808:
-    _out = s_kick_808.next();
-    break;
-
-    case CLAP:
-    _out = s_clap.next();
-    break;
-
-    default:
-    _out = 0;
-  }
+  _out = sampleNext(_sound);
   return _out * _vel * _vol / 128;
 }
 
-void Channel::start(int velocity) {
+void Channel::startHit(int velocity) {
   _vel = velocity;
-  switch(_sound) {
-    case HAT_808:
-    s_hat_808.start();
-    break;
-
-    case SNARE_NIKO:
-    s_snare_niko.start();
-    break;
-
-    case KICK_808:
-    s_kick_808.start();
-    break;
-
-    case CLAP:
-    s_clap.start();
-    break;
-  }
+  sampleStart(_sound);
 }
 
 void Channel::setPitch(float pitch) {
-  switch(_sound) {
-    case HAT_808:
-    s_hat_808.setFreq(pitch * (float) closedhat_SAMPLERATE / (float) closedhat_NUM_CELLS);
-    break;
-
-    case SNARE_NIKO:
-    s_snare_niko.setFreq(pitch * (float) snare_SAMPLERATE / (float) snare_NUM_CELLS);
-    break;
-
-    case KICK_808:
-    s_kick_808.setFreq(pitch * (float) kick_SAMPLERATE / (float) kick_NUM_CELLS);
-    break;
-
-    case CLAP:
-    s_clap.setFreq(pitch * (float) clap_SAMPLERATE / (float) clap_NUM_CELLS);
-    break;
-  }
+  samplePitch(_sound);
 }
 
 void Channel::setVolume(int vol) {
@@ -188,22 +127,43 @@ byte Channel::getNumSounds() {
 }
 
 Channel c[NUM_CHANNELS];
+
+class Sequence {
+  public:
+    Sequence();
+    bool sc[NUM_CHANNELS][SEQUENCE_LENGTH]; // channels
+    void init(int channel, bool sequence[]);
+    void setHit(bool onOff);
+
+  private:
+    
+};
+
+Sequence::Sequence() {
+  
+}
+
+void Sequence::init(int channel, bool sequence[]) {
+  for(int i = 0; i < SEQUENCE_LENGTH; i ++) {
+    sc[channel][i] = sequence[i];
+  }
+}
+
+void Sequence::setHit(bool onOff) {
+  byte newHitStep = currentStep - 1;
+  
+  if(halfStepDelay.ready()) newHitStep ++;
+  else c[selectedChannel].startHit(100);
+  sc[selectedChannel][newHitStep % SEQUENCE_LENGTH] = onOff;
+}
+
 Sequence s[100];
-
-// select modes
-const int BEAT_SELECT = 0;
-const int CHANNEL_SELECT = 1;
-const int SOUND_SELECT = 2;
-const int SAVE_SELECT = 3;
-
-// selection
-int selectMode = BEAT_SELECT;
-int selectedBeat = 0;
-int selectedChannel = 0;
 
 void setup() {
   Serial.begin(9600);
-  delay(1000);
+  delay(500);
+  pinMode(2, INPUT);
+  pinMode(13, OUTPUT);
   randomSeed(analogRead(0));
   initSequences();
   startMozzi(CONTROL_RATE);
@@ -216,32 +176,42 @@ void setup() {
   c[SNARE].defineSounds(snareSounds,2);
   
   stepDelay.set(stepDelayPeriod);
+  halfStepDelay.set(stepDelayPeriod / 2);
 }
 
 void loop() {
   audioHook();
 }
 
-int counter = 0;
 void updateControl(){
+  if(digitalRead(2)) {
+    if(hitInputReady) s[selectedBeat].setHit(true);
+    hitInputReady = false;
+  } else {
+    hitInputReady = true;
+  }
   checkSerialCommand();
   if(stepDelay.ready() && playing) {
+    //digitalWrite(13, currentStep % 4 == 0);
     int r; // random number
     int v; // velocity
     for(int i = 0; i < NUM_CHANNELS; i ++) {
       v = 0;
       r = random(100);
-      if(s[selectedBeat].c[i][counter % SEQUENCE_LENGTH]) {
+      if(s[selectedBeat].sc[i][currentStep]) {
         v = 100;
       } else if(r < hyperactivity) {
         v = 100;
       }
       c[i].setPitch(pitch);
-      if(v > 0) c[i].start(v);
+      if(v > 0) c[i].startHit(v);
     }
     stepDelay.set(stepDelayPeriod);
     stepDelay.start();
-    counter ++;
+    halfStepDelay.set(stepDelayPeriod / 2);
+    halfStepDelay.start();
+    currentStep ++;
+    currentStep = currentStep % SEQUENCE_LENGTH;
   }
 }
 
@@ -272,11 +242,12 @@ void checkSerialCommand() {
     else if(command == "sound") selectMode = SOUND_SELECT;
     else if(command == "stop") playing = false;
     else if(command == "start") playing = true;
-    else if(command == "t") {
+    else if(command == "h") s[selectedBeat].setHit(true);
+    else if(command == "tempo") {
       //tempo = param.toInt();
-    } else if(command == "p") {
+    } else if(command == "pitch") {
       pitch = param.toFloat();
-    } else if(command == "h") {
+    } else if(command == "hyper") {
       hyperactivity = param.toInt();
     }
   }
@@ -322,5 +293,8 @@ void initSequences() {
   s[1].init(HAT_CLOSED, b2);
   bool b3[] = {1,1,0,0,1,0,0,0,0,0,0,0,1,1,0,0,};
   s[1].init(SNARE, b3);
+
+  bool c2[] = {1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,};
+  s[2].init(HAT_CLOSED, c2);
 }
 
