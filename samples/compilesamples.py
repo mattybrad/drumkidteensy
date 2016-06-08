@@ -80,11 +80,41 @@ def char2mozzi(infile, outfile, tablename, samplerate):
 		print ("wrote " + outfile)
 
 def process_folder():
-        sample_defs = ""
+        include_list = ''
+        sample_defs = ''
+        const_list = ''
+        func_next = 'int sampleNext(int sound) {\nint nextOut;\nswitch(sound) {\n'
+        func_start = 'void sampleStart(int sound) {\nswitch(sound) {\n'
+        func_pitch = 'void samplePitch(int sound) {\nswitch(sound) {\n'
+        i = 0
         for filename in os.listdir('prepared'):
                 raw_name = os.path.splitext(filename)[0]
+                include_list += '#include <samples/mattdrums/'+raw_name+'.h>\n'
                 sample_defs += 'Sample <'+raw_name+'_NUM_CELLS, AUDIO_RATE> s_'+raw_name+'('+raw_name+'_DATA);\n'
-                #char2mozzi('prepared/' + filename, '../../libraries/Mozzi-1.0.2/samples/mattdrums/' + os.path.splitext(filename)[0] + '.h', os.path.splitext(filename)[0], 16384)
+                const_list += 'const byte S_'+raw_name.upper()+' = '+str(i)+';\n'
+                func_next += 'case S_'+raw_name.upper()+':\n'
+                func_next += 'nextOut = s_'+raw_name+'.next();\n'
+                func_next += 'break;\n\n'
+                func_start += 'case S_'+raw_name.upper()+':\n'
+                func_start += 's_'+raw_name+'.start();\n'
+                func_start += 'break;\n\n'
+                func_pitch += 'case S_'+raw_name.upper()+':\n'
+                func_pitch += 's_'+raw_name+'.setFreq(pitch * (float) '+raw_name+'_SAMPLERATE / (float) '+raw_name+'_NUM_CELLS);\n'
+                func_pitch += 'break;\n\n'
+                i+=1
+                char2mozzi('prepared/' + filename, '../../libraries/Mozzi-1.0.2/samples/mattdrums/' + os.path.splitext(filename)[0] + '.h', os.path.splitext(filename)[0], 16384)
+        func_next += 'default:\n'
+        func_next += 'nextOut=0;\n'
+        func_next += '}\n'
+        func_next += 'return nextOut;\n'
+        func_next += '}\n'
+        func_start += '}\n}\n'
+        func_pitch += '}\n}\n'
+        print include_list
         print sample_defs
+        print const_list
+        print func_next
+        print func_start
+        print func_pitch
 
 process_folder()

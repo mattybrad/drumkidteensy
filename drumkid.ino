@@ -2,10 +2,6 @@
 #include <MozziGuts.h>
 #include <Sample.h>
 #include <EventDelay.h>
-#include <samples/mattdrums/closedhat.h>
-#include <samples/mattdrums/snare.h>
-#include <samples/mattdrums/kick.h>
-#include <samples/mattdrums/clap.h>
 
 #define CONTROL_RATE 64
 
@@ -20,15 +16,6 @@ const int HAT_CLOSED = 2;
 const int TOM_LOW = 3;
 const int TOM_MID = 4;
 const int TOM_HIGH = 5;
-// etc...
-
-// sound defs
-const byte KICK_808 = 0;
-const byte KICK_NOISE = 1;
-const byte SNARE_808 = 2;
-const byte SNARE_NIKO = 3;
-const byte HAT_808 = 4;
-const byte CLAP = 5;
 // etc...
 
 // select modes
@@ -168,12 +155,12 @@ void setup() {
   initSequences();
   startMozzi(CONTROL_RATE);
   
-  byte kickSounds[] = {KICK_808};
-  c[KICK].defineSounds(kickSounds,1);
-  byte hatSounds[] = {HAT_808};
-  c[HAT_CLOSED].defineSounds(hatSounds,1);
-  byte snareSounds[] = {SNARE_NIKO,CLAP};
-  c[SNARE].defineSounds(snareSounds,2);
+  byte kickSounds[] = {S_KICK808,S_KICKBEEP,S_KICKNOISE};
+  c[KICK].defineSounds(kickSounds,3);
+  byte hatSounds[] = {S_HAT808,S_HATBEEP,S_CLAVES808};
+  c[HAT_CLOSED].defineSounds(hatSounds,3);
+  byte snareSounds[] = {S_SNARENIKO,S_RIM808,S_CLAP808,S_SNAREBEEP,S_SNARENOISE};
+  c[SNARE].defineSounds(snareSounds,5);
   
   stepDelay.set(stepDelayPeriod);
   halfStepDelay.set(stepDelayPeriod / 2);
@@ -217,7 +204,7 @@ void updateControl(){
 
 int updateAudio(){
   out = c[KICK].next() + c[HAT_CLOSED].next() + c[SNARE].next();
-  out = out >> 2;
+  out = out >> 3;
   return out;
 }
 
