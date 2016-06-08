@@ -12,7 +12,7 @@ const int NUM_CHANNELS = 6;
 const int MAX_CHANNEL_SOUNDS = 8;
 const int KICK = 0;
 const int SNARE = 1;
-const int HAT_CLOSED = 2;
+const int HAT = 2;
 const int TOM_LOW = 3;
 const int TOM_MID = 4;
 const int TOM_HIGH = 5;
@@ -155,12 +155,9 @@ void setup() {
   initSequences();
   startMozzi(CONTROL_RATE);
   
-  byte kickSounds[] = {S_KICK808,S_KICKBEEP,S_KICKNOISE};
-  c[KICK].defineSounds(kickSounds,3);
-  byte hatSounds[] = {S_HAT808,S_HATBEEP,S_CLAVES808};
-  c[HAT_CLOSED].defineSounds(hatSounds,3);
-  byte snareSounds[] = {S_SNARENIKO,S_RIM808,S_CLAP808,S_SNAREBEEP,S_SNARENOISE};
-  c[SNARE].defineSounds(snareSounds,5);
+  c[KICK].defineSounds(soundList_kick,soundListNum_kick);
+  c[HAT].defineSounds(soundList_hat,soundListNum_hat);
+  c[SNARE].defineSounds(soundList_snare,soundListNum_snare);
   
   stepDelay.set(stepDelayPeriod);
   halfStepDelay.set(stepDelayPeriod / 2);
@@ -203,7 +200,7 @@ void updateControl(){
 }
 
 int updateAudio(){
-  out = c[KICK].next() + c[HAT_CLOSED].next() + c[SNARE].next();
+  out = c[KICK].next() + c[HAT].next() + c[SNARE].next();
   out = out >> 3;
   return out;
 }
@@ -270,18 +267,18 @@ void initSequences() {
   bool a1[] = {1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,};
   s[0].init(KICK, a1);
   bool a2[] = {1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,};
-  s[0].init(HAT_CLOSED, a2);
+  s[0].init(HAT, a2);
   bool a3[] = {0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,};
   s[0].init(SNARE, a3);
 
   bool b1[] = {1,0,0,0,0,0,1,1,0,0,0,1,0,0,0,1,};
   s[1].init(KICK, b1);
   bool b2[] = {0,0,1,0,0,0,1,0,0,0,1,0,0,1,1,0,};
-  s[1].init(HAT_CLOSED, b2);
+  s[1].init(HAT, b2);
   bool b3[] = {1,1,0,0,1,0,0,0,0,0,0,0,1,1,0,0,};
   s[1].init(SNARE, b3);
 
   bool c2[] = {1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,};
-  s[2].init(HAT_CLOSED, c2);
+  s[2].init(HAT, c2);
 }
 
