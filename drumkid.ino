@@ -2,6 +2,7 @@
 #include <MozziGuts.h>
 #include <Sample.h>
 #include <EventDelay.h>
+#include "DisplayBytes.h";
 
 #define CONTROL_RATE 64
 
@@ -38,12 +39,28 @@ int currentStep = 0;
 // output
 long out;
 
+// pins
+int HIT_PIN = 2;
+int INC_PIN = 3;
+int DEC_PIN = 4;
+int BEAT_PIN = 5;
+int CHANNEL_PIN = 6;
+int SOUND_PIN = 7;
+//Pin connected to ST_CP of 74HC595
+int DISPLAY_LATCH_PIN = 10;
+//Pin connected to SH_CP of 74HC595
+int DISPLAY_CLOCK_PIN = 12;
+////Pin connected to DS of 74HC595
+int DISPLAY_DATA_PIN = 11;
+
 // control
 bool playing = true;
 int zoom = 0;
 int hyperactivity = 0;
 float pitch = 1.0;
 bool hitInputReady = true;
+bool incReady = true;
+bool decReady = true;
 
 #include "SampleDefs.h";
 
@@ -147,9 +164,16 @@ void Sequence::setHit(bool onOff) {
 Sequence s[100];
 
 void setup() {
+  pinMode(DISPLAY_LATCH_PIN, OUTPUT);
+  updateDisplay(0);
   Serial.begin(9600);
   delay(500);
-  pinMode(2, INPUT);
+  pinMode(HIT_PIN, INPUT);
+  pinMode(INC_PIN, INPUT);
+  pinMode(DEC_PIN, INPUT);
+  pinMode(BEAT_PIN, INPUT);
+  pinMode(CHANNEL_PIN, INPUT);
+  pinMode(SOUND_PIN, INPUT);
   pinMode(13, OUTPUT);
   randomSeed(analogRead(0));
   initSequences();
@@ -168,11 +192,26 @@ void loop() {
 }
 
 void updateControl(){
-  if(digitalRead(2)) {
+  if(digitalRead(HIT_PIN)) {
     if(hitInputReady) s[selectedBeat].setHit(true);
     hitInputReady = false;
   } else {
     hitInputReady = true;
+  }
+  if(digitalRead(BEAT_PIN)) selectMode = BEAT_SELECT;
+  if(digitalRead(CHANNEL_PIN)) selectMode = CHANNEL_SELECT;
+  if(digitalRead(SOUND_PIN)) selectMode = SOUND_SELECT;
+  if(digitalRead(INC_PIN)) {
+    if(incReady) handleIncDec(1);
+    incReady = false;
+  } else {
+    incReady = true;
+  }
+  if(digitalRead(DEC_PIN)) {
+    if(decReady) handleIncDec(-1);
+    decReady = false;
+  } else {
+    decReady = true;
   }
   checkSerialCommand();
   if(stepDelay.ready() && playing) {
@@ -242,6 +281,7 @@ void handleIncDec(int delta) {
     case BEAT_SELECT:
     selectedBeat += delta;
     selectedBeat = constrain(selectedBeat, 0, 99);
+    updateDisplay(selectedBeat);
     Serial.println(selectedBeat);
     break;
 
@@ -282,3 +322,57 @@ void initSequences() {
   s[2].init(HAT, c2);
 }
 
+void updateDisplay(int num) {
+  num = num % 100;
+  digitalWrite(DISPLAY_LATCH_PIN, 0);
+  shiftOut(DISPLAY_DATA_PIN, DISPLAY_CLOCK_PIN, numbers2[num % 10]);
+  shiftOut(DISPLAY_DATA_PIN, DISPLAY_CLOCK_PIN, numbers1[num / 10]);
+  digitalWrite(DISPLAY_LATCH_PIN, 1);
+}
+
+// copied off internet
+void shiftOut(int myDataPin, int myClockPin, byte myDataOut) {
+  // This shifts 8 bits out MSB first, 
+  //on the rising edge of the clock,
+  //clock idles low
+
+  //internal function setup
+  int i=0;
+  int pinState;
+  pinMode(myClockPin, OUTPUT);
+  pinMode(myDataPin, OUTPUT);
+
+ //clear everything out just in case to
+ //prepare shift register for bit shifting
+  digitalWrite(myDataPin, 0);
+  digitalWrite(myClockPin, 0);
+
+  //for each bit in the byte myDataOut�
+  //NOTICE THAT WE ARE COUNTING DOWN in our for loop
+  //This means that %00000001 or "1" will go through such
+  //that it will be pin Q0 that lights. 
+  for (i=7; i>=0; i--)  {
+    digitalWrite(myClockPin, 0);
+
+    //if the value passed to myDataOut and a bitmask result 
+    // true then... so if we are at i=6 and our value is
+    // %11010100 it would the code compares it to %01000000 
+    // and proceeds to set pinState to 1.
+    if ( myDataOut & (1<<i) ) {
+      pinState= 1;
+    }
+    else {  
+      pinState= 0;
+    }
+
+    //Sets the pin to HIGH or LOW depending on pinState
+    digitalWrite(myDataPin, pinState);
+    //register shifts bits on upstroke of clock pin  
+    digitalWrite(myClockPin, 1);
+    //zero the data pin after shift to prevent bleed through
+    digitalWrite(myDataPin, 0);
+  }
+
+  //stop shifting
+  digitalWrite(myClockPin, 0);
+}
